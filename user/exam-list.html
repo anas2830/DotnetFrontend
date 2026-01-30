@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>My Exams</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body {
+            background: #f5f6fa;
+        }
+        .sidebar {
+            height: 100vh;
+            background: #0d6efd;
+            color: #fff;
+        }
+        .sidebar a {
+            color: #fff;
+            text-decoration: none;
+            padding: 12px 15px;
+            display: block;
+        }
+        .sidebar a:hover,
+        .sidebar a.active {
+            background: rgba(255,255,255,0.2);
+        }
+        .card {
+            border: none;
+            box-shadow: 0 0 10px rgba(0,0,0,0.08);
+        }
+        .exam-card {
+            transition: transform 0.2s;
+        }
+        .exam-card:hover {
+            transform: scale(1.02);
+        }
+        .already-purchased {
+            background-color: #d4edda;
+            border-left: 5px solid #28a745;
+        }
+        .not-purchased {
+            background-color: #f8d7da;
+            border-left: 5px solid #dc3545;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="container-fluid">
+        <div class="row">
+    
+            <!-- Sidebar -->
+            <div class="col-md-2 sidebar p-0">
+                <h5 class="text-center py-3 border-bottom">User Panel</h5>
+    
+                <a href="/user/dashboard.html">Dashboard</a>
+                <a href="/user/exam-list.html" class="active">All Exams</a>
+                <a href="/user/my-exams.html">My Exams</a>
+                <a href="/user/profile.html">My Profile</a>
+                <a href="#" onclick="logout()">Logout</a>
+            </div>
+  
+            <div class="col-md-10 p-4">
+                <h4 class="mb-4">All Exams</h4>
+                <div id="exam-list" class="row g-3"></div>
+            </div>
+        </div>
+    </div>
+
+
+    <!-- Toast -->
+    <div class="toast-container position-fixed top-0 end-0 p-3">
+        <div id="appToast" class="toast align-items-center text-white border-0">
+            <div class="d-flex">
+                <div class="toast-body" id="toastMessage"></div>
+                <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="../common/app.js"></script>
+    
+    <script>
+        async function loadExams() {
+            try {
+                const response = await fetch('http://localhost:5223/api/exam', {
+                    headers: {
+                        'Authorization': 'Bearer ' + localStorage.getItem('token')
+                    }
+                });
+                const exams = await response.json();
+                
+                const container = document.getElementById('exam-list');
+                container.innerHTML = '';
+
+                exams.forEach(exam => {
+                    const examDate = new Date(exam.date);
+                    let statusText = '';
+                    let buttonHTML = '';
+
+                    if (exam.alreadyPurchase) {
+                        if (examDate < new Date()) {
+                            statusText = 'Expired';
+                            buttonHTML = `<button class="btn btn-secondary" disabled>Expired</button>`;
+                        } else {
+                            statusText = 'Go to Exam';
+                            buttonHTML = `<a href="/exam/${exam.id}" class="btn btn-success">Go to Exam</a>`;
+                        }
+                    } else {
+                        statusText = 'Not Purchased';
+                        buttonHTML = `<a href="#" onclick="buyExam('${exam.id}')" class="btn btn-primary">Buy Exam</a>`;
+                    }
+                    const card = document.createElement('div');
+                    card.className = 'col-md-4';
+                    card.innerHTML = `
+                        <div class="card exam-card ${exam.alreadyPurchase ? 'already-purchased' : 'not-purchased'}">
+                            <div class="card-body">
+                                <h5 class="card-title">${exam.title}</h5>
+                                <p class="card-text">
+                                    <strong>Date:</strong> ${new Date(exam.date).toLocaleDateString()}<br>
+                                    <strong>Price:</strong> ${exam.price} USD<br>
+                                    <strong>Duration:</strong> ${exam.timeInMinutes} minutes<br>
+                                    <strong>Total Questions:</strong> ${exam.totalQuestions}<br>
+                                    <strong>Status:</strong> ${statusText}
+                                </p>
+                                ${buttonHTML}
+                            </div>
+                        </div>
+                    `;
+                    container.appendChild(card);
+                });
+            } catch (err) {
+                console.error(err);
+                alert('Failed to load exams.');
+            }
+        }
+        loadExams();
+
+        async function buyExam(examId) {
+            try {
+                const userId = JSON.parse(localStorage.getItem('user')).userId;
+                if (!userId) {
+                    alert('User not logged in');
+                    return;
+                }
+
+                const response = await fetch('http://localhost:5223/api/userexam/buy', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': 'Bearer ' + localStorage.getItem('token')
+                    },
+                    body: JSON.stringify({
+                        userId: userId,
+                        examId: examId
+                    })
+                });
+
+                if (!response.ok) {
+                    const err = await response.json();
+                    showToast('Failed to buy exam: ' + (err.message || 'Unknown error'), 'error');
+                    return;
+                }
+
+                showToast('Exam purchased successfully!', 'success');
+                // reload exams to update status
+                loadExams();
+
+            } catch (err) {
+                console.error(err);
+                showToast('Error buying exam', 'error');
+            }
+        }
+
+    </script>
+</body>
+</html>
