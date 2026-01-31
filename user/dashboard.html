@@ -41,8 +41,7 @@
             <h5 class="text-center py-3 border-bottom">User Panel</h5>
 
             <a href="/user/dashboard.html" class="active" onclick="showSection('dashboard')">Dashboard</a>
-            <a href="/user/exam-list.html" onclick="showSection('allExams')">All Exams</a>
-            <a href="/user/my-exams.html" onclick="showSection('myExams')">My Exams</a>
+            <a href="/user/exam-list.html" onclick="showSection('allExams')">Exams List</a>
             <a href="/user/profile.html" onclick="showSection('profile')">My Profile</a>
             <a href="#" onclick="logout()">Logout</a>
         </div>
@@ -79,7 +78,7 @@
 
                 <div class="card card-stat">
                     <div class="card-header bg-white">
-                        <strong>My Recent Exams</strong>
+                        <strong>My Exams List</strong>
                     </div>
                     <div class="card-body p-0">
                         <table class="table mb-0">
@@ -87,6 +86,8 @@
                                 <tr>
                                     <th>#</th>
                                     <th>Exam Name</th>
+                                    <th>Date</th>
+                                    <th>Paid Amount</th>
                                     <th>Status</th>
                                     <th>Action</th>
                                 </tr>
@@ -122,20 +123,83 @@
 
 <script>
     const token = localStorage.getItem("token");
-    if (!token) window.location.href = "index.html";
-
-    function showSection(id) {
-        document.querySelectorAll("#dashboard, #allExams, #myExams, #profile")
-            .forEach(div => div.classList.add("d-none"));
-        document.getElementById(id).classList.remove("d-none");
+    if (!token) window.location.href = "../index.html";
+    
+    // Fetch user dashboard data
+    async function loadDashboard() {
+        try {
+            const res = await fetch("http://localhost:5223/api/user/dashboard", {
+                method: "GET",
+                headers: {
+                    "Authorization": "Bearer " + token,
+                    "Content-Type": "application/json"
+                }
+            });
+    
+            if (!res.ok) {
+                const err = await res.json();
+                alert(err.message || "Failed to load dashboard");
+                return;
+            }
+    
+            const data = await res.json();
+            renderDashboard(data);
+        } catch (err) {
+            console.error(err);
+            alert("Error fetching dashboard");
+        }
+    }
+    
+    // Render dashboard stats & exams table
+    function renderDashboard(data) {
+        // Stats
+        document.getElementById("totalPurchased").textContent = data.totalPurchased ?? 0;
+        document.getElementById("attemptedExams").textContent = data.totalSubmitted ?? 0;
+        document.getElementById("remainingExams").textContent = data.remainingExams ?? 0;
+    
+        // Recent exams table
+        const tbody = document.getElementById("recentExams");
+        tbody.innerHTML = "";
+    
+        if (data.exams && data.exams.length) {
+            data.exams.forEach((exam, index) => {
+                let actionHTML = "";
+    
+                if (exam.status === "Submitted") {
+                    actionHTML = `<a target="_blank" href="/user/summary-report.html?userExamId=${exam.userExamId}" class="btn btn-success btn-sm">View Report</a>`;
+                } else if (exam.status === "Booked" || exam.status === "Started") {
+                    actionHTML = `<a href="/user/start-exam.html?examId=${exam.examId}" class="btn btn-primary btn-sm">Go to Exam</a>`;
+                } else {
+                    actionHTML = `<button class="btn btn-secondary btn-sm" disabled>Not Available</button>`;
+                }
+    
+                tbody.innerHTML += `
+                    <tr>
+                        <td>${index + 1}</td>
+                        <td>${exam.title}</td>
+                        <td>${formatExamDate(exam.date.split('T')[0])}</td>
+                        <td>${exam.paidAmount}</td>
+                        <td>${exam.status}</td>
+                        <td>${actionHTML}</td>
+                    </tr>
+                `;
+            });
+        } else {
+            tbody.innerHTML = `<tr><td colspan="4" class="text-center">No exams found</td></tr>`;
+        }
     }
 
-    function logout() {
-        localStorage.clear();
-        window.location.href = "/index.html";
+    function formatExamDate(isoDate) {
+        if (!isoDate) return "-";
+        const d = new Date(isoDate);
+        const options = { day: '2-digit', month: 'short', year: 'numeric' };
+        return d.toLocaleDateString('en-US', options); // "30 Jan, 2026"
     }
-
+    
+    // Load dashboard on page load
+    document.addEventListener("DOMContentLoaded", loadDashboard);
 </script>
+    
 
 </body>
 </html>

@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Start Exam</title>
+<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+<style>
+body { background:#f5f6fa; }
+.sidebar { height:100vh; background:#0d6efd; color:#fff; }
+.sidebar a { color:#fff; text-decoration:none; padding:12px 15px; display:block; }
+.sidebar a:hover, .sidebar a.active { background:rgba(255,255,255,0.2); }
+.card { border:none; box-shadow:0 0 10px rgba(0,0,0,0.08); }
+.option { margin:8px 0; }
+#timer { font-weight:bold; color:red; }
+</style>
+</head>
+<body>
+    <div class="container-fluid">
+        <div class="row">
+            <!-- Sidebar -->
+            <div class="col-md-2 sidebar p-0">
+            <h5 class="text-center py-3 border-bottom">User Panel</h5>
+            <a href="/user/dashboard.html">Dashboard</a>
+            <a href="/user/exam-list.html">Exams List</a>
+            <a href="/user/profile.html">My Profile</a>
+            <a href="#" onclick="logout()">Logout</a>
+            </div>
+
+            <!-- Main -->
+            <div class="col-md-10 p-4" id="examContainer">
+                <h4 id="examTitle">Exam Title</h4>
+                <p>⏱ Time Left: <span id="timer"></span></p>
+                <div id="questionContainer" class="card p-3 mb-3"></div>
+                <div class="d-flex justify-content-between">
+                    <button class="btn btn-secondary" id="prevBtn">Previous</button>
+                    <button class="btn btn-primary" id="nextBtn">Next</button>
+                    <button class="btn btn-danger" id="submitBtn" style="display:none;" onclick="submitExam()">Submit Exam</button>
+                </div>
+            </div>
+
+            <div id="errorContainer" class="col-md-10 p-4" style="display:none;">
+                <p id="errorMessage" style="color:red;text-align:center;"></p>
+            </div>
+
+            <div id="successContainer" class="col-md-10 p-4" style="display:none;">
+                <h3>Exam submitted successfully!</h3>
+                <button class="btn btn-primary mt-3" id="goSummaryBtn" onclick="goSummary()">Go to Summary Report</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast -->
+    <div class="toast-container position-fixed top-0 end-0 p-3">
+        <div id="appToast" class="toast align-items-center text-white border-0">
+            <div class="d-flex">
+                <div class="toast-body" id="toastMessage"></div>
+                <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="../common/app.js"></script>
+
+    <script>
+        let exam = null;
+        let currentIndex = 0;
+        let answers = {};
+        let totalSeconds = 0;
+
+        const token = localStorage.getItem('token');
+        const user = JSON.parse(localStorage.getItem('user'));
+        if(!token || !user){
+            window.location.href = "../index.html";
+        }
+
+        function getQueryParam(param){
+            const urlParams = new URLSearchParams(window.location.search);
+            return urlParams.get(param);
+        }
+
+        async function loadExam(){
+            const examId = getQueryParam('examId');
+            const userId = user.userId;
+            if(!examId || !userId){
+                alert("Missing examId or userId"); return;
+            }
+
+            try {
+                const res = await fetch('http://localhost:5223/api/userexam/start', {
+                    method:'POST',
+                    headers:{ 
+                        'Content-Type':'application/json', 
+                        'Authorization': 'Bearer ' + token 
+                    },
+                    body: JSON.stringify({ userId, examId })
+                });
+                if(!res.ok){
+                    const err = await res.json();
+                    showToast(err.message || "Failed to load exam", "error");
+                    document.getElementById('examContainer').style.display = 'none';
+                    document.getElementById('errorMessage').innerText = err.message || "Failed to load exam";
+                    document.getElementById('errorContainer').style.display = 'block';
+                    return;
+                }
+                exam = await res.json();
+
+                totalSeconds = exam.durationMinutes * 60;
+                document.getElementById('examTitle').innerText = exam.examTitle;
+
+                renderQuestion();
+                startTimer();
+
+            } catch(err){
+                alert("Error loading exam: "+err.message);
+            }
+        }
+
+        loadExam();
+
+        function renderQuestion(){
+            const q = exam.questions[currentIndex];
+            const container = document.getElementById('questionContainer');
+            container.innerHTML = `<h5>Q${currentIndex+1}. ${q.title}</h5>` +
+                q.options.map(o=>`
+                <div class="option">
+                    <label>
+                    <input type="radio" name="q${q.id}" value="${o.id}"
+                    ${answers[q.id]===o.id?'checked':''}
+                    onchange="answers['${q.id}']='${o.id}'">
+                    ${o.id}. ${o.title}
+                    </label>
+                </div>`).join('');
+
+            document.getElementById('prevBtn').disabled = currentIndex===0;
+            document.getElementById('nextBtn').style.display = currentIndex===exam.questions.length-1?'none':'inline-block';
+            document.getElementById('submitBtn').style.display = currentIndex===exam.questions.length-1?'inline-block':'none';
+        }
+
+        document.getElementById('nextBtn').onclick = ()=>{ currentIndex++; renderQuestion(); };
+        document.getElementById('prevBtn').onclick = ()=>{ currentIndex--; renderQuestion(); };
+
+        function startTimer(){
+            const timerEl = document.getElementById('timer');
+            const interval = setInterval(()=>{
+                let m = Math.floor(totalSeconds/60);
+                let s = totalSeconds%60;
+                timerEl.innerText = `${m}:${s.toString().padStart(2,'0')}`;
+                if(totalSeconds<=0){ clearInterval(interval); submitExam(); }
+                totalSeconds--;
+            },1000);
+        }
+
+        var userExamId = null;
+        async function submitExam(){
+            const payload = {
+                userId: user.userId,
+                examId: exam.examId,
+                answers: exam.questions.map(q => ({
+                    questionId: q.id,
+                    selectedAnswer: answers[q.id] || ""
+                }))
+            };
+
+            console.log("Payload to submit:", payload);
+
+            try {
+                const res = await fetch('http://localhost:5223/api/userexam/submit', {
+                    method:'POST',
+                    headers:{ 'Content-Type':'application/json', 'Authorization': 'Bearer ' + token },
+                    body: JSON.stringify(payload)
+                });
+                const result = await res.json();
+                if(!res.ok){
+                    showToast(result.message || "Failed to submit exam", "error");
+                    return;
+                }
+                userExamId = result.id;
+                showToast("Exam submitted successfully!", "success");
+                document.getElementById('successContainer').style.display = 'block';
+                document.getElementById('examContainer').style.display = 'none';
+                document.getElementById('errorContainer').style.display = 'none';
+            } catch(err){
+                console.error(err);
+                showToast("Server error", "error");
+            }
+    }
+
+    function goSummary(){
+        window.location.href = `/user/summary-report.html?userExamId=${userExamId}`;
+    }
+
+    function logout(){
+        localStorage.clear();
+        window.location.href = "../index.html";
+    }
+    </script>
+</body>
+</html>

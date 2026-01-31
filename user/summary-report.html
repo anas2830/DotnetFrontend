@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Exam Summary Report</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+</head>
+<body class="p-4">
+
+<div class="container">
+  <h1 class="mb-4 text-center" id="messageDisplay">Exam Summary Report</h1>
+
+  <!-- Exam Info -->
+  <div id="exam-info" class="mb-4"></div>
+
+  <!-- User Info -->
+  <div id="user-info" class="mb-4"></div>
+
+  <!-- Questions -->
+  <div id="questions-container"></div>
+</div>
+
+<!-- Toast -->
+<div class="toast-container position-fixed top-0 end-0 p-3">
+  <div id="appToast" class="toast align-items-center text-white border-0">
+    <div class="d-flex">
+      <div class="toast-body" id="toastMessage"></div>
+      <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+<script src="../common/app.js"></script>
+
+<script>
+  // Get examId from URL
+  const params = new URLSearchParams(window.location.search);
+  const userExamId = params.get('userExamId');
+
+  async function fetchSummary(userExamId) {
+    try {
+        const res = await fetch(`http://localhost:5223/api/userexam/${userExamId}/summary`, {
+        method: 'GET',
+        headers: {
+            'Authorization': 'Bearer ' + localStorage.getItem('token'),
+            'Content-Type': 'application/json'
+        }
+        });
+
+        if (!res.ok) {
+            const err = await res.json();
+            showToast(err.message, 'error');
+            document.getElementById('messageDisplay').innerText = err.message;
+            return;
+        }
+
+        const data = await res.json();
+        renderSummary(data);
+
+    } catch (err) {
+        console.error(err);
+        showToast('Failed to fetch user exam', 'error');
+        document.getElementById('messageDisplay').innerText = 'Failed to fetch user exam';
+    }
+    }
+
+    // Call the function
+    fetchSummary(userExamId);
+
+  function renderSummary(data) {
+    // Exam Info
+    const examInfo = `
+      <h3>${data.exam.title}</h3>
+      <p><strong>Date:</strong> ${new Date(data.exam.date).toLocaleDateString()}</p>
+      <p><strong>Total Questions:</strong> ${data.exam.totalQuestions}</p>
+      <p><strong>Time:</strong> ${data.exam.timeInMinutes} minutes</p>
+      <p><strong>Status:</strong> ${data.status}</p>
+      <p><strong>Score:</strong> ${data.score}</p>
+      <p><strong>Amount Paid:</strong> $${data.amountPaid}</p>
+      <hr>
+    `;
+    document.getElementById('exam-info').innerHTML = examInfo;
+
+    // User Info
+    const userInfo = `
+      <h4>User Info</h4>
+      <p><strong>Name:</strong> ${data.user.name}</p>
+      <p><strong>Email:</strong> ${data.user.email}</p>
+      ${data.user.mobile ? `<p><strong>Mobile:</strong> ${data.user.mobile}</p>` : ''}
+      ${data.user.address ? `<p><strong>Address:</strong> ${data.user.address}</p>` : ''}
+      <hr>
+    `;
+    document.getElementById('user-info').innerHTML = userInfo;
+
+    // Questions
+    const questionsContainer = document.getElementById('questions-container');
+    questionsContainer.innerHTML = '<h4>Questions</h4>';
+
+    data.questions.forEach((q, index) => {
+      const optionsHtml = Object.entries(q.question.options)
+        .map(([key, value]) => {
+          const isSelected = q.answer.selectedAnswer === key ? 'fw-bold text-primary' : '';
+          const isCorrect = q.question.correctAnswer === key ? 'text-success' : '';
+          return `<li class="${isSelected} ${isCorrect}">${key}. ${value}</li>`;
+        })
+        .join('');
+
+      const questionHtml = `
+        <div class="mb-3 p-3 border rounded">
+          <h5>Q${index + 1}: ${q.question.title}</h5>
+          <ul>${optionsHtml}</ul>
+          <p><strong>Your Answer:</strong> ${q.answer.selectedAnswer || 'No Answer'}</p>
+          <p><strong>Correct Answer:</strong> ${q.question.correctAnswer}</p>
+          <p><strong>Result:</strong> ${q.answer.isCorrect ? 'Correct' : 'Incorrect'}</p>
+        </div>
+      `;
+      questionsContainer.innerHTML += questionHtml;
+    });
+  }
+</script>
+
+</body>
+</html>
