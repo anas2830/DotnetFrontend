@@ -98,14 +98,17 @@
 					userName: data.userName,
 					userRole: data.userRole
 				}));
-				window.location.href = "user/dashboard.html";
-	
+
+				if(data.userRole == "Admin") {
+					window.location.href = "admin/dashboard.html";
+				} else {
+					window.location.href = "user/dashboard.html";
+				}
 			} catch (error) {
 				console.error(error);
-				showToast("Server error. Please try again.", "error");
+				showToast("Login failed. Please check your credentials.", "error");
 			}
 		}
-	</script>	
-
+	</script>
 </body>
 </html>

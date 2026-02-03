@@ -98,25 +98,6 @@
                 </div>
             </div>
 
-            <!-- All Exams -->
-            <div id="allExams" class="d-none">
-                <h4>All Exams</h4>
-                <div id="allExamList" class="row"></div>
-            </div>
-
-            <!-- My Exams -->
-            <div id="myExams" class="d-none">
-                <h4>My Exams</h4>
-                <div id="myExamList" class="row"></div>
-            </div>
-
-            <!-- Profile -->
-            <div id="profile" class="d-none">
-                <h4>My Profile</h4>
-                <input class="form-control mb-2" id="userName">
-                <button class="btn btn-primary" onclick="updateProfile()">Update</button>
-            </div>
-
         </div>
     </div>
 </div>
@@ -198,6 +179,11 @@
     
     // Load dashboard on page load
     document.addEventListener("DOMContentLoaded", loadDashboard);
+
+    function logout() {
+        localStorage.clear();
+        window.location.href = "/index.html";
+    }
 </script>
     
 
